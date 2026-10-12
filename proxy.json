@@ -1,0 +1,10 @@
+{
+  "name": "proxy",
+  "base": "velocity",
+  "plugins": [
+    { "name": "ViaVersion", "source": "github", "slug": "ViaVersion/ViaVersion" },
+    { "name": "CommandWhitelist", "source": "modrinth", "slug": "commandwhitelist" },
+    { "name": "VeloAuth", "source": "modrinth", "slug": "veloauth" },
+    { "name": "SkinsRestorer", "source": "modrinth", "slug": "skinsrestorer" }
+  ]
+}

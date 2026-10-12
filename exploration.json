@@ -1,0 +1,14 @@
+{
+  "name": "exploration",
+  "base": "paper",
+  "plugins": [
+    { "name": "LuckPerms", "source": "modrinth", "slug": "luckperms" },
+    { "name": "CommandWhitelist", "source": "modrinth", "slug": "commandwhitelist" },
+    { "name": "DiscordSRV", "source": "modrinth", "slug": "discordsrv" },
+    { "name": "DiscordSRVOAuth", "source": "modrinth", "slug": "discordsrvoauth" },
+    { "name": "BlueMap", "source": "modrinth", "slug": "bluemap" },
+    { "name": "AdvancedTeleport", "source": "modrinth", "slug": "advancedteleport" },
+    { "name": "Teaks-Tweaks", "source": "modrinth", "slug": "teaks-tweaks" },
+    { "name": "VeinMiner", "source": "modrinth", "slug": "veinminer" }
+  ]
+}

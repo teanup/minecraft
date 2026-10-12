@@ -1,0 +1,177 @@
+name: Build images
+
+on:
+  schedule:
+    - cron: "36 5 * * 0"
+  workflow_dispatch:
+
+concurrency:
+  group: build-images
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  resolve:
+    name: Resolve images
+    runs-on: ubuntu-latest
+    outputs:
+      paper_version: ${{ steps.paper.outputs.semver }}
+      paper_url: ${{ steps.paper.outputs.url }}
+      paper_sha256: ${{ steps.paper.outputs.sha256 }}
+      velocity_version: ${{ steps.velocity.outputs.semver }}
+      velocity_url: ${{ steps.velocity.outputs.url }}
+      velocity_sha256: ${{ steps.velocity.outputs.sha256 }}
+      images: ${{ steps.images.outputs.list }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Resolve Paper
+        id: paper
+        run: ./.scripts/resolve-server.sh -b paper >>"$GITHUB_OUTPUT"
+
+      - name: Resolve Velocity
+        id: velocity
+        run: ./.scripts/resolve-server.sh -b velocity >>"$GITHUB_OUTPUT"
+
+      - name: List layered images
+        id: images
+        env:
+          MINECRAFT_VERSION: ${{ steps.paper.outputs.version }}
+        run: |
+          list="$(jq -sc --arg image "$IMAGE" --arg version "$MINECRAFT_VERSION" '
+            [.[] | {
+              name,
+              base: "\($image)-\(.base)",
+              minecraft: (.minecraft // $version)
+            }]
+          ' *.json)"
+          echo "list=$list" >>"$GITHUB_OUTPUT"
+
+  base:
+    name: Build ${{ matrix.project }} ${{ matrix.version }}
+    needs: resolve
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - project: paper
+            version: ${{ needs.resolve.outputs.paper_version }}
+            url: ${{ needs.resolve.outputs.paper_url }}
+            sha256: ${{ needs.resolve.outputs.paper_sha256 }}
+          - project: velocity
+            version: ${{ needs.resolve.outputs.velocity_version }}
+            url: ${{ needs.resolve.outputs.velocity_url }}
+            sha256: ${{ needs.resolve.outputs.velocity_sha256 }}
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v4
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}-${{ matrix.project }}
+          tags: |
+            type=semver,pattern={{major}}.{{minor}},value=${{ matrix.version }},match=^(\d+.\d+.\d+)
+            type=semver,pattern={{version}},value=${{ matrix.version }},priority=1000
+            type=raw,value=latest
+
+      - name: Cache downloads
+        uses: actions/cache@v6
+        with:
+          path: .cache
+          key: downloads-${{ matrix.project }}-${{ matrix.sha256 }}
+
+      - name: Prepare context
+        run: ./.scripts/prepare-context.sh -b "${{ matrix.project }}" -u "${{ matrix.url }}" -s "${{ matrix.sha256 }}"
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64
+          file: Dockerfile.${{ matrix.project }}
+          context: .build
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  layered:
+    name: Build ${{ matrix.name }} on Minecraft ${{ matrix.minecraft }}
+    needs: [resolve, base]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        image: ${{ fromJSON(needs.resolve.outputs.images) }}
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v4
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}-${{ matrix.image.name }}
+          tags: |
+            type=semver,pattern={{version}},value={{date 'YYYY.M.D'}}
+            type=raw,value=latest
+
+      - name: Cache downloads
+        uses: actions/cache@v6
+        with:
+          path: .cache
+          key: downloads-${{ matrix.image.name }}-${{ matrix.image.minecraft }}-${{ hashFiles(format('{0}.json', matrix.image.name)) }}
+          restore-keys: |
+            downloads-${{ matrix.image.name }}-${{ matrix.image.minecraft }}-
+            downloads-${{ matrix.image.name }}-
+
+      - name: Prepare build context
+        run: |
+          ./.scripts/prepare-context.sh -l '${{ matrix.image.name }}.json' -V "${{ matrix.image.minecraft }}"
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64
+          file: Dockerfile.layered
+          context: .build
+          build-args: |
+            BASE_IMAGE=${{ matrix.image.base }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

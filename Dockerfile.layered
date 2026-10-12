@@ -1,0 +1,6 @@
+# syntax=docker/dockerfile:1
+
+ARG BASE_IMAGE=ghcr.io/teanup/minecraft-paper:latest
+FROM ${BASE_IMAGE}
+
+COPY plugins/ /opt/plugins/

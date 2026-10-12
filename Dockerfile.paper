@@ -1,0 +1,23 @@
+# syntax=docker/dockerfile:1
+
+FROM docker.io/library/azul-zulu:27-jre-headless-alpine
+
+RUN apk add --no-cache bash jq
+
+COPY entrypoint.sh /usr/local/bin/entrypoint
+COPY healthcheck.sh /usr/local/bin/healthcheck
+RUN chmod +x /usr/local/bin/entrypoint /usr/local/bin/healthcheck
+
+RUN mkdir -p /server && chmod 1777 /server
+
+WORKDIR /server
+EXPOSE 25565
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 CMD ["healthcheck"]
+
+ENTRYPOINT ["entrypoint", "paper"]
+
+COPY server.jar /opt/server/server.jar
+
+ENV MEMORY_LIMIT=4G \
+  JVM_FLAGS="-XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+PerfDisableSharedMem -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1HeapRegionSize=8M -XX:G1HeapWastePercent=5 -XX:G1MaxNewSizePercent=40 -XX:G1MixedGCCountTarget=4 -XX:G1MixedGCLiveThresholdPercent=90 -XX:G1NewSizePercent=30 -XX:G1RSetUpdatingPauseTimePercent=5 -XX:G1ReservePercent=20 -XX:G1IHOP=15 -XX:MaxGCPauseMillis=200 -XX:MaxTenuringThreshold=1 -XX:SurvivorRatio=32 -Dusing.aikars.flags=https://mcflags.emc.gs -Daikars.new.flags=true"

@@ -1,0 +1,25 @@
+# syntax=docker/dockerfile:1
+
+FROM docker.io/library/azul-zulu:27-jre-headless-alpine
+
+RUN apk add --no-cache bash jq
+
+COPY entrypoint.sh /usr/local/bin/entrypoint
+COPY healthcheck.sh /usr/local/bin/healthcheck
+RUN chmod +x /usr/local/bin/entrypoint /usr/local/bin/healthcheck
+
+RUN mkdir -p /server && chmod 1777 /server
+
+WORKDIR /server
+EXPOSE 25565
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD ["healthcheck"]
+
+ENTRYPOINT ["entrypoint", "velocity"]
+
+COPY server.jar /opt/server/server.jar
+
+RUN unzip -p /opt/server/server.jar default-velocity.toml >/opt/server/velocity.toml
+
+ENV MEMORY_LIMIT=512M \
+  JVM_FLAGS="-XX:+AlwaysPreTouch -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1HeapRegionSize=4M -XX:MaxInlineLevel=15"
