@@ -147,7 +147,6 @@ jobs:
           images: ${{ env.IMAGE }}-${{ matrix.image.name }}
           tags: |
             type=semver,pattern={{version}},value={{date 'YYYY.M.D'}}
-            type=raw,value=latest
 
       - name: Cache downloads
         uses: actions/cache@v6
