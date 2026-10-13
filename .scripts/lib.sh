@@ -3,8 +3,8 @@
 
 set -euo pipefail
 
-REPO="${GITHUB_REPOSITORY:-teanup/minecraft}"
-USER_AGENT="${USER_AGENT:-$REPO (https://github.com/$REPO)}"
+REPO="${GITHUB_REPOSITORY:-teanup/minecraft-containers}"
+USER_AGENT="${USER_AGENT:-github.com/$REPO}"
 
 # Logs a message
 log() { printf '%s\n' "$*" >&2; }
